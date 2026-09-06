@@ -81,7 +81,9 @@ export default function EditTableModal({ isOpen, table, onClose, onTableUpdated 
     setServerError('');
   };
 
-  const isOccupiedBlocked = table?.status === 'Occupied' && formData.status !== 'Available';
+  const isOccupiedBlocked =
+    table?.status?.toLowerCase() === 'occupied' &&
+    formData.status?.toLowerCase() !== 'available';
 
   const handleSubmit = async (e) => {
     e.preventDefault();

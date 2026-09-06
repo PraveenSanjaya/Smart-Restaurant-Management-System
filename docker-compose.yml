@@ -1,5 +1,4 @@
-version: '3.8'
-
+name: smart-restaurant-management-system
 services:
   # 1. MySQL Database
   mysql:
@@ -10,10 +9,11 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: restaurant_identity_db
     ports:
-      - '3306:3306'
+      - '3307:3306'
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/identity-db/01_init_identity.sql:/docker-entrypoint-initdb.d/01_init_identity.sql
+      - ./database/reservation-db/01_init_reservation.sql:/docker-entrypoint-initdb.d/02_init_reservation.sql
     networks:
       - restaurant-network
     healthcheck:
@@ -44,7 +44,28 @@ services:
     networks:
       - restaurant-network
 
-  # 3. Web Frontend (React + Nginx)
+  # 3. Reservation Microservice (.NET)
+  reservation-service:
+    build:
+      context: ./backend/reservation-service
+      dockerfile: Dockerfile
+    container_name: smart_restaurant_reservation_service
+    restart: always
+    ports:
+      - '5000:5000'
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=restaurant_reservation_db;User=root;Password=root;AllowPublicKeyRetrieval=True;SslMode=None;
+      - Jwt__Key=SmartRestaurant_Super_Secret_Key_For_Jwt_Token_Validation_2026!
+      - Jwt__Issuer=SmartRestaurant
+      - Jwt__Audience=SmartRestaurantUsers
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - restaurant-network
+
+  # 4. Web Frontend (React + Nginx)
   frontend:
     build:
       context: ./frontend/restaurant-web
@@ -55,6 +76,7 @@ services:
       - '80:80'
     depends_on:
       - identity-service
+      - reservation-service
     networks:
       - restaurant-network
 

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const RESERVATION_API_BASE =
-  import.meta.env.VITE_RESERVATION_API_URL || 'http://localhost:5000/api';
+  import.meta.env.VITE_RESERVATION_API_URL || 'http://localhost:5002/api';
 
 export const reservationApi = axios.create({
   baseURL: RESERVATION_API_BASE,
