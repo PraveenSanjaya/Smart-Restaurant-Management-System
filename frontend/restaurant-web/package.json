@@ -22,6 +22,9 @@
     "eslint": "latest",
     "@eslint/js": "latest",
     "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest"
+    "eslint-plugin-react-refresh": "latest",
+    "tailwindcss": "^3",
+    "postcss": "latest",
+    "autoprefixer": "latest"
   }
 }
