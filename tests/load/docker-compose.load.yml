@@ -1,0 +1,68 @@
+# SE3112 – Load & Performance test environment.
+# A disposable stack (MySQL + Identity + Reservation) used by the k6 scripts in ./k6.
+# Kafka is deliberately left out: the outbox publisher is disabled, so reservation writes
+# still go through the real transactional outbox table but nothing is shipped to a broker.
+#
+#   docker compose -f tests/load/docker-compose.load.yml up -d --build --wait
+#   docker compose -f tests/load/docker-compose.load.yml down -v
+name: smart-restaurant-loadtest
+
+x-jwt: &jwt
+  Jwt__Key: LoadTest_Signing_Key_That_Is_Long_Enough_For_HS256_2026!
+  Jwt__Issuer: SmartRestaurant
+  Jwt__Audience: SmartRestaurantUsers
+  Jwt__ExpiryMinutes: "120"
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: loadtest
+    command: ["--max-connections=500", "--innodb-buffer-pool-size=256M"]
+    ports:
+      - "3317:3306"
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ../../database/identity-db/01_init_identity.sql:/docker-entrypoint-initdb.d/01_init_identity.sql:ro
+      - ../../database/reservation-db/01_init_reservation.sql:/docker-entrypoint-initdb.d/02_init_reservation.sql:ro
+      - ../../database/reservation-db/02_reservations.sql:/docker-entrypoint-initdb.d/03_reservations.sql:ro
+      - ../../database/reservation-db/03_reservation_creation.sql:/docker-entrypoint-initdb.d/04_reservation_creation.sql:ro
+      - ../../database/reservation-db/04_reservation_lifecycle.sql:/docker-entrypoint-initdb.d/05_reservation_lifecycle.sql:ro
+      - ../../database/reservation-db/05_reservation_concurrency.sql:/docker-entrypoint-initdb.d/06_reservation_concurrency.sql:ro
+      - ../../database/reservation-db/06_reservation_outbox.sql:/docker-entrypoint-initdb.d/07_reservation_outbox.sql:ro
+    healthcheck:
+      # TCP ping only succeeds once the init scripts finished and the real server is listening.
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -ploadtest -e 'SELECT 1 FROM restaurant_reservation_db.ReservationOutbox LIMIT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  identity-service:
+    build: ../../backend/identity-service
+    environment:
+      <<: *jwt
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Server=mysql;Port=3306;Database=restaurant_identity_db;User=root;Password=loadtest;AllowPublicKeyRetrieval=True;SslMode=None;Maximum Pool Size=200;
+      Staff__AuthorizationCode: LOADTEST-STAFF
+      Logging__LogLevel__Default: Warning
+    ports:
+      - "5001:5001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  reservation-service:
+    build: ../../backend/reservation-service
+    environment:
+      <<: *jwt
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Server=mysql;Port=3306;Database=restaurant_reservation_db;User=root;Password=loadtest;AllowPublicKeyRetrieval=True;SslMode=None;Maximum Pool Size=200;
+      Kafka__PublisherEnabled: "false"
+      Kafka__BootstrapServers: disabled:9092
+      Logging__LogLevel__Default: Warning
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy

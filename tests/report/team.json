@@ -1,0 +1,26 @@
+{
+  "$comment": "Edit names / registration numbers here – they appear on the pipeline dashboard and must match the README.",
+  "project": "Smart Restaurant Management System (Cinnamon Bistro) – SE3022 microservices",
+  "roles": {
+    "unit": {
+      "title": "Unit Testing & Mocking",
+      "owner": "H.R.M.A.A. Bandara (IT24100315)",
+      "tools": "xUnit · Moq · Coverlet"
+    },
+    "mutation": {
+      "title": "Mutation Testing",
+      "owner": "H. L. P. S. Perera (IT24101848)",
+      "tools": "Stryker.NET"
+    },
+    "load": {
+      "title": "Load & Performance Testing",
+      "owner": "D.M.N. Pesanjith (IT24101505)",
+      "tools": "k6 · Docker Compose"
+    },
+    "quality": {
+      "title": "Code Quality & Metrics",
+      "owner": "Wijesinghe K. (IT24102587)",
+      "tools": "Roslyn analyzers · ESLint · ReportGenerator"
+    }
+  }
+}

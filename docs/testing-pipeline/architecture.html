@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SE3112 Testing Pipeline Architecture</title>
+<style>
+  @page { size: A4 landscape; margin: 9mm; }
+  :root { --ink:#1b2333; --muted:#5b6475; --line:#d5dae3; --a:#3557d6; --b:#0f8a6a; --c:#b25d0b; --d:#8a3cc2; --e:#c0392b; --bg:#f5f7fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 9.6px/1.38 "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+  h1 { font-size: 17px; margin: 0; }
+  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 5px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--ink); padding-bottom: 4px; margin-bottom: 7px; }
+  .top p { margin:0; color: var(--muted); }
+  .grid { display:grid; grid-template-columns: 0.95fr 1.6fr; gap: 9px; }
+  .panel { border:1px solid var(--line); border-radius:6px; padding:7px 8px; background:#fff; }
+  .box { border:1.5px solid var(--ink); border-radius:5px; padding:3px 6px; background:#fff; text-align:center; font-weight:600; }
+  .muted { color: var(--muted); font-weight: 400; }
+  .arch { display:grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items:center; }
+  .arch .full { grid-column: 1 / -1; }
+  .arrow { text-align:center; color:var(--muted); font-size: 11px; line-height: 1; }
+  .flow { display:grid; grid-template-columns: 0.75fr 0.12fr 1.15fr 0.12fr 1.25fr 0.12fr 0.9fr; align-items:center; gap: 2px; }
+  .stack { display:flex; flex-direction:column; gap:5px; }
+  .stage { border-radius:5px; padding:4px 6px; color:#fff; font-weight:600; }
+  .stage small { display:block; font-weight:400; opacity:.92; font-size: 8.6px; }
+  .s-build { background:#4b5563; } .s-unit { background:var(--a);} .s-mut { background:var(--d);} .s-load{ background:var(--c);} .s-q { background:var(--b);} .s-rep{ background:var(--ink);}
+  .tri { color:var(--muted); font-size: 14px; text-align:center; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { text-align:left; vertical-align:top; padding: 3.5px 5px; border-bottom: 1px solid var(--line); }
+  th { background: var(--bg); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  td b { color: var(--ink); }
+  .tag { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; vertical-align: middle; }
+  .row2 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; margin-top: 9px; }
+  ul { margin: 0; padding-left: 14px; } li { margin: 1px 0; }
+  code { font: 8.8px ui-monospace, Consolas, monospace; background: var(--bg); padding: 0 2px; border-radius: 3px; }
+  .foot { margin-top: 6px; color: var(--muted); font-size: 8.6px; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div><h1>Smart Restaurant (Cinnamon Bistro) — Microservice Testing Pipeline</h1>
+  <p>SE3112 Advanced Software Engineering · take-home assessment · system under test: SE3022 microservices</p></div>
+  <p style="text-align:right">D.M.N. Pesanjith · H. L. P. S. Perera · H.R.M.A.A. Bandara · Wijesinghe K.</p>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>SE3022 architecture (system under test)</h2>
+    <div class="arch">
+      <div class="box full">React 19 + Vite SPA <span class="muted">(Nginx)</span></div>
+      <div class="arrow">▼ /api</div><div class="arrow">▼ /reservation-api · Bearer JWT</div>
+      <div class="box">Identity service<br><span class="muted">ASP.NET Core 10 · :5001<br>register · login · BCrypt · JWT · profiles</span></div>
+      <div class="box">Reservation service<br><span class="muted">ASP.NET Core 10 · :5000<br>tables · availability · bookings · reports</span></div>
+      <div class="arrow">▼ ADO.NET</div><div class="arrow">▼ ADO.NET · row locks · outbox</div>
+      <div class="box">MySQL <span class="muted">identity_db</span></div>
+      <div class="box">MySQL <span class="muted">reservation_db</span> → <span class="muted">Kafka (outbox)</span></div>
+    </div>
+    <p style="margin:6px 0 0" class="muted">Shared JWT contract (issuer, audience, NameIdentifier claim). Double booking is prevented with <code>SELECT … FOR UPDATE</code> and a half-open overlap check; lifecycle events go through a transactional outbox.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Unified test automation — GitHub Actions <code>test-pipeline.yml</code> · local twin <code>scripts/run-pipeline.sh</code></h2>
+    <div class="flow">
+      <div class="stage s-build">Trigger + build<small>push · PR · manual (profile)<br>.NET 10 · React build</small></div>
+      <div class="tri">▶</div>
+      <div class="stack">
+        <div class="stage s-unit">Unit &amp; Mocking<small>xUnit · Moq · Coverlet → TRX + Cobertura</small></div>
+        <div class="stage s-load">Load &amp; Performance<small>Compose stack (MySQL+2 APIs) · k6 journey + race</small></div>
+      </div>
+      <div class="tri">▶</div>
+      <div class="stack">
+        <div class="stage s-q">Code Quality gate<small>uses coverage · Roslyn SARIF · ESLint · ratings A–E</small></div>
+        <div class="stage s-mut">Mutation Testing<small>Stryker.NET matrix: reservation | identity · baseline + hardened</small></div>
+      </div>
+      <div class="tri">▶</div>
+      <div class="stage s-rep">Unified report<small>artifacts/index.html · job summary · pipeline-report artifact · fails if any stage fails</small></div>
+    </div>
+    <table style="margin-top:7px">
+      <tr><th>Role / owner</th><th>Implementation</th><th>Key result</th></tr>
+      <tr><td><span class="tag" style="background:var(--a)"></span><b>Unit Testing &amp; Mocking</b><br>H.R.M.A.A. Bandara</td>
+          <td>184 tests: <code>[Theory]</code> with InlineData / generated MemberData (full 4×4 state machine) / ClassData; strict mocks, stubs with <code>out</code> params, spies via Callback, fakes (clock, in-memory repo)</td>
+          <td>414 tests green · 68.6% line / 68.1% branch coverage</td></tr>
+      <tr><td><span class="tag" style="background:var(--d)"></span><b>Mutation Testing</b><br>H. L. P. S. Perera</td>
+          <td>Stryker.NET (<i>Complete</i> level, per-test coverage, break &lt; 60%) on domain rules + identity services; survivors analysed → 23 targeted hardening tests</td>
+          <td>Reservation 81.5% → <b>97.5%</b> · Identity 82.2% → <b>100%</b> · 3 equivalent mutants (dead branch)</td></tr>
+      <tr><td><span class="tag" style="background:var(--c)"></span><b>Load &amp; Performance</b><br>D.M.N. Pesanjith</td>
+          <td>k6 closed-model journey (browse → search → book → view → cancel → history) + open-model login; smoke / load / stress / spike / soak; per-endpoint SLO thresholds; 50-VU double-booking race</td>
+          <td>Load: all SLOs ✓, 0% errors, booking p95 9 ms · Stress: BCrypt login knee ≈ 25/s · Race: 1 winner / 49 × 409 per round</td></tr>
+      <tr><td><span class="tag" style="background:var(--b)"></span><b>Code Quality &amp; Metrics</b><br>Wijesinghe K.</td>
+          <td>Opt-in Roslyn analyzers (complexity CA1502, coupling CA1506, SQL CA2100…) → SARIF; ESLint flat config; SQALE debt model; hotspot review; ratchet gate</td>
+          <td>Gate ✓ · Maintainability A (0.62%) · Security A (4 hotspots SAFE) · Reliability C · 122 smells ≈ 3 d debt</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="row2">
+  <div class="panel"><h2>Tool choices &amp; why</h2>
+    <ul>
+      <li><b>xUnit + Moq</b>: already the SE3022 stack; Moq supports strict mocks, ref/out stubs and callbacks.</li>
+      <li><b>Stryker.NET</b>: the de-facto .NET mutation tool; HTML report shows each mutant in the source.</li>
+      <li><b>k6</b>: scripts are code (versioned, reviewable), thresholds act as SLO gates, and it runs headless in CI.</li>
+      <li><b>Roslyn analyzers + custom gate</b>: SonarQube-style metrics without a server or secret token.</li>
+    </ul></div>
+  <div class="panel"><h2>Automation design decisions</h2>
+    <ul>
+      <li>One script, two runners: CI calls <code>run-pipeline.sh</code>, so local demo = CI behaviour.</li>
+      <li>Stages run in parallel where independent; quality reuses the unit-test coverage artifact.</li>
+      <li>Disposable load stack on tmpfs MySQL; the Kafka publisher is disabled (outbox still written).</li>
+      <li>Gate philosophy: hard limits for security/coverage, a <i>ratchet</i> for legacy smells (clean as you code).</li>
+    </ul></div>
+  <div class="panel"><h2>Run it</h2>
+    <ul>
+      <li><code>./scripts/run-pipeline.sh all</code> → <code>artifacts/index.html</code></li>
+      <li><code>… unit</code> · <code>… quality</code> · <code>… mutation baseline|hardened</code></li>
+      <li><code>… load smoke|load|stress|spike|soak</code> · <code>… race</code></li>
+      <li>GitHub → Actions → <i>SE3112 Test Pipeline</i> → Run workflow (choose profile)</li>
+    </ul></div>
+</div>
+<div class="foot"><span>Repository: PraveenSanjaya/Smart-Restaurant-Management-System</span><span>Details: README.md § SE3112 and tests/*/README.md</span></div>
+</body>
+</html>

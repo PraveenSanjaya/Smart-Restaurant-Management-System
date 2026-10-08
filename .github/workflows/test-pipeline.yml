@@ -1,0 +1,222 @@
+# SE3112 – Microservice Testing Pipeline
+#
+#   build ─┬─► unit tests + coverage ─┬─► code quality gate ──┐
+#          │                          └─► mutation testing ───┤
+#          └─► load + concurrency tests (k6 on Docker Compose) ┴─► unified report
+#
+# Local twin: ./scripts/run-pipeline.sh all
+name: SE3112 Test Pipeline
+
+on:
+  push:
+    branches: [main, develop, "feature/**", "test/**", "claude/**"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      load_profile:
+        description: k6 workload profile for the customer journey
+        type: choice
+        options: [smoke, load, stress, spike, soak]
+        default: load
+      mutation_baseline:
+        description: Also run Stryker with the original test suite (before mutation hardening)
+        type: boolean
+        default: true
+
+concurrency:
+  group: test-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "22"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  K6_VERSION: "0.54.0"
+
+jobs:
+  build:
+    name: Build services & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Build backend microservices
+        run: |
+          for p in backend/*/*.csproj; do dotnet build "$p" -c Release; done
+      - name: Build test projects
+        run: |
+          for p in tests/unit/*/*.csproj; do dotnet build "$p" -c Release; done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/restaurant-web/package-lock.json
+      - name: Build React frontend
+        working-directory: frontend/restaurant-web
+        run: npm ci --no-audit --no-fund && npm run build
+
+  unit-tests:
+    name: "Unit Testing & Mocking (xUnit · Moq · Coverlet)"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Run unit tests with coverage
+        run: ./scripts/run-pipeline.sh unit
+      - name: Coverage summary
+        if: always()
+        run: cat artifacts/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-tests
+          # The root-level status file keeps "artifacts/" as the common root, so every stage's
+          # files land in the same layout when the report job merges the downloads.
+          path: |
+            artifacts/pipeline-status.env
+            artifacts/unit/**/*.trx
+            artifacts/unit/**/coverage.cobertura.xml
+            artifacts/coverage/
+          retention-days: 14
+
+  code-quality:
+    name: "Code Quality & Metrics (analyzers · ESLint · quality gate)"
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/restaurant-web/package-lock.json
+      - name: Download coverage from the unit-test stage
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-tests
+          path: artifacts
+      - name: Static analysis + quality gate
+        run: ./scripts/run-pipeline.sh quality
+      - name: Quality summary
+        if: always()
+        run: cat artifacts/quality/quality-report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-quality
+          path: |
+            artifacts/pipeline-status.env
+            artifacts/quality/
+          retention-days: 14
+
+  mutation-testing:
+    name: "Mutation Testing – ${{ matrix.service }} (Stryker.NET)"
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [reservation, identity]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Mutation testing – baseline suite (before hardening)
+        if: github.event_name != 'workflow_dispatch' || inputs.mutation_baseline
+        run: ./scripts/run-pipeline.sh mutation baseline ${{ matrix.service }}
+      - name: Mutation testing – hardened suite (gated by "break" threshold)
+        run: ./scripts/run-pipeline.sh mutation hardened ${{ matrix.service }}
+      - name: Mutation summary
+        if: always()
+        run: |
+          for f in artifacts/mutation/*/reports/mutation-report.md; do
+            echo "#### $(basename "$(dirname "$(dirname "$f")")")" >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-${{ matrix.service }}
+          path: |
+            artifacts/pipeline-status.env
+            artifacts/mutation/*/reports/
+          retention-days: 14
+
+  load-testing:
+    name: "Load & Performance (k6 on Docker Compose)"
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || 'smoke' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+      - name: Start MySQL + Identity + Reservation services
+        run: ./scripts/run-pipeline.sh stack-up
+      - name: Customer journey (${{ env.PROFILE }} profile)
+        run: SKIP_STACK=1 ./scripts/run-pipeline.sh load "$PROFILE"
+      - name: Double-booking race (50 concurrent users × 3 rounds)
+        if: always()
+        run: SKIP_STACK=1 ./scripts/run-pipeline.sh race
+      - name: Load summary
+        if: always()
+        run: cat artifacts/load/*-summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Stop environment and keep service logs
+        if: always()
+        run: ./scripts/run-pipeline.sh stack-down
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-testing
+          path: |
+            artifacts/pipeline-status.env
+            artifacts/load/
+          retention-days: 14
+
+  report:
+    name: Unified pipeline report
+    needs: [unit-tests, code-quality, mutation-testing, load-testing]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Collect every stage's artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Build dashboard
+        run: node tests/report/build-dashboard.mjs --artifacts artifacts
+      - name: Publish summary
+        run: cat artifacts/pipeline-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-report
+          path: artifacts/
+          retention-days: 30
+      - name: Fail if any stage failed
+        if: contains(needs.*.result, 'failure')
+        run: |
+          echo "One or more pipeline stages failed – see the dashboard artifact." >&2
+          exit 1

@@ -25,6 +25,7 @@
     "eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-refresh": "latest",
+    "globals": "^16.4.0",
     "jsdom": "26.1.0",
     "vite": "latest"
   }

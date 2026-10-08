@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    SE3112 – Code Quality & Metrics.
+    Opt-in static analysis profile. Normal builds are unaffected; the quality stage enables it with
+      dotnet build -p:RunCodeQuality=true
+    Each project then writes a SARIF 2.1 log that tests/quality/quality-gate.mjs turns into metrics.
+  -->
+  <PropertyGroup Condition="'$(RunCodeQuality)' == 'true'">
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <CodeQualityOutDir Condition="'$(CodeQualityOutDir)' == ''">$(MSBuildThisFileDirectory)artifacts/quality/sarif/</CodeQualityOutDir>
+    <ErrorLog>$(CodeQualityOutDir)$(MSBuildProjectName).sarif,version=2.1</ErrorLog>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RunCodeQuality)' == 'true'">
+    <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)tests/quality/code-quality.globalconfig" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)tests/quality/CodeMetricsConfig.txt" />
+  </ItemGroup>
+
+  <Target Name="CreateCodeQualityOutDir" BeforeTargets="CoreCompile" Condition="'$(RunCodeQuality)' == 'true'">
+    <MakeDir Directories="$(CodeQualityOutDir)" />
+  </Target>
+</Project>

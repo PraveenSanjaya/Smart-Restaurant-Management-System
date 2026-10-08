@@ -8,6 +8,68 @@ SE3022 Case Study Project — Year 3 Semester 1
 
 Cinnamon Bistro is a restaurant management project developed across four sprints. Sprint 1 implements Identity & Access and core Table & Seating Management through a React frontend and two ASP.NET Core microservices. Reservation workflows are the next scope; ordering, kitchen operations, billing, and reporting remain later milestones.
 
+## SE3112 — Microservice Testing Pipeline
+
+Take-home assessment for **SE3112 Advanced Software Engineering**. The SE3022 microservices (Identity + Reservation, ASP.NET Core 10 / MySQL) are the system under test. The group built one test-automation pipeline, and each member owns one testing paradigm inside it.
+
+| Role | Owner | Tools | Where | Detailed README |
+|---|---|---|---|---|
+| Unit Testing & Mocking | H.R.M.A.A. Bandara (IT24100315) | xUnit, Moq, Coverlet | `tests/unit/*/UnitMocking/` | [tests/unit/README.md](tests/unit/README.md) |
+| Mutation Testing | H. L. P. S. Perera (IT24101848) | Stryker.NET | `tests/mutation/`, `tests/unit/*/MutationHardening/` | [tests/mutation/README.md](tests/mutation/README.md) |
+| Load & Performance Testing | D.M.N. Pesanjith (IT24101505) | k6, Docker Compose | `tests/load/` | [tests/load/README.md](tests/load/README.md) |
+| Code Quality & Metrics | Wijesinghe K. (IT24102587) | Roslyn analyzers (SARIF), ESLint, ReportGenerator, quality gate | `tests/quality/`, `Directory.Build.props`, `frontend/restaurant-web/eslint.config.js` | [tests/quality/README.md](tests/quality/README.md) |
+| Test automation (group) | all | GitHub Actions, Bash, Node | `.github/workflows/test-pipeline.yml`, `scripts/run-pipeline.sh`, `tests/report/` | this section |
+
+One-page architecture: [docs/testing-pipeline/architecture.pdf](docs/testing-pipeline/architecture.pdf)
+
+### Pipeline
+
+```text
+                    ┌─► Unit Testing & Mocking ─┬─► Code Quality gate ───────┐
+ push / PR / manual │   (xUnit+Moq, coverage)   └─► Mutation Testing ────────┤
+ ──► Build ─────────┤                               (Stryker, 2 services)    ├─► Unified report
+     (.NET, React)  └─► Load & Performance  (Docker Compose stack + k6:      │   (dashboard + job
+                        customer journey + double-booking race) ─────────────┘    summary + artifact)
+```
+
+- **CI/CD:** [`.github/workflows/test-pipeline.yml`](.github/workflows/test-pipeline.yml) runs on every push to `main`, `develop`, `feature/**`, `test/**` and on PRs. A manual run (**Actions → SE3112 Test Pipeline → Run workflow**) lets you pick the k6 profile (`smoke | load | stress | spike | soak`) and whether to include the mutation baseline.
+- **Local twin:** [`scripts/run-pipeline.sh`](scripts/run-pipeline.sh) runs exactly the same stages on a laptop, so every demo is reproducible offline.
+- **Unified reporting:** each stage writes to `artifacts/`. `tests/report/build-dashboard.mjs` merges everything into `artifacts/index.html` (one card per role, linking to each detailed report) and `artifacts/pipeline-summary.md`, which CI appends to the run's *Summary* page. In CI the whole folder is downloadable as the **pipeline-report** artifact.
+
+### Tool setup
+
+| Tool | Version | Install |
+|---|---|---|
+| .NET SDK | 10.0 | <https://dot.net> (`dotnet --list-sdks`) |
+| Node.js | 20.19+ / 22 | <https://nodejs.org> |
+| Docker + Compose v2 | 24+ | Docker Desktop / Engine. Used for the load-test stack and for k6 if it isn't installed |
+| Stryker.NET, ReportGenerator | pinned in [`dotnet-tools.json`](dotnet-tools.json) | `dotnet tool restore` (the script does this) |
+| k6 | 0.54+ | optional: <https://grafana.com/docs/k6/latest/set-up/install-k6/>; otherwise the script uses the `grafana/k6` Docker image |
+
+### Pipeline commands
+
+```bash
+./scripts/run-pipeline.sh all                 # every stage, then the dashboard (≈ 12 min)
+./scripts/run-pipeline.sh unit                # unit tests + coverage            (≈ 30 s)
+./scripts/run-pipeline.sh quality             # analyzers + ESLint + quality gate (≈ 1 min)
+./scripts/run-pipeline.sh mutation hardened   # Stryker, both services           (≈ 5 min)
+./scripts/run-pipeline.sh mutation baseline reservation   # the "before" score
+./scripts/run-pipeline.sh load load           # k6 journey; profiles: smoke|load|stress|spike|soak
+./scripts/run-pipeline.sh race                # k6 double-booking concurrency test
+./scripts/run-pipeline.sh report              # rebuild artifacts/index.html
+```
+
+Open `artifacts/index.html` afterwards. On Windows, run the script from Git Bash or WSL.
+
+### Results at a glance (local run)
+
+| Paradigm | Key result |
+|---|---|
+| Unit & Mocking | 414 tests pass (207 new: 184 unit/mocking + 23 mutation-hardening); coverage 68.6% line / 68.1% branch |
+| Mutation | Reservation 81.5% → **97.5%**, Identity 82.2% → **100%** after killing the survivors; the 3 remaining mutants are provably equivalent |
+| Load | `load` profile: every SLO threshold passes, 0% errors, reservation endpoints p95 < 10 ms. `stress` finds the bottleneck: BCrypt login saturates at about 25/s. Race test: exactly 1 of 50 concurrent bookings wins in each round |
+| Code quality | Gate passed: maintainability **A** (debt ratio 0.62%, ~3 days of debt), security **A** (4 SQL hotspots reviewed), reliability **C** (10 legacy ESLint errors, ratcheted) |
+
 ## Sprint 1 — Foundation & Core Access
 
 ### Sprint 1 Goal
@@ -157,7 +219,7 @@ npm run build
 
 Frontend automated tests exist, but the current CI workflow only installs dependencies and builds the frontend; it does not run `npm test`. No numerical pass totals are published here because committed test-result reports are absent. Source test definitions alone do not establish successful execution.
 
-The supplied Sprint 1 review summary reports functional registration/login, JWT/RBAC, profile, table management, Postman/API, and Selenium/UI testing. Repository QA and sprint-review documents are currently templates, with no corresponding execution evidence or Postman/Selenium suites checked in. JMeter is mentioned in the testing plan but has no implemented load-test suite in this checkout.
+The supplied Sprint 1 review summary reports functional registration/login, JWT/RBAC, profile, table management, Postman/API, and Selenium/UI testing. Repository QA and sprint-review documents are currently templates, with no corresponding execution evidence or Postman/Selenium suites checked in. Load and performance testing is implemented with k6 as part of the SE3112 pipeline (see above).
 
 ### CI Pipeline
 

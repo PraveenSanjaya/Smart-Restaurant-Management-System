@@ -1,0 +1,57 @@
+{
+  "$comment": "SE3112 – Code Quality & Metrics. Thresholds, remediation model and reviewed security hotspots used by quality-gate.mjs.",
+  "gate": {
+    "minLineCoverage": 65,
+    "minBranchCoverage": 60,
+    "maxMaintainabilityRating": "B",
+    "maxUnreviewedSecurityHotspots": 0,
+    "maxAnalyzerErrors": 0,
+    "ratchet": {
+      "$comment": "Clean-as-you-code: legacy debt is tolerated, new debt is not. Lower these numbers whenever debt is paid off.",
+      "maxDotnetCodeSmells": 82,
+      "maxEslintProblems": 40,
+      "maxEslintErrors": 10
+    }
+  },
+  "ratingBands": { "A": 5, "B": 10, "C": 20, "D": 50 },
+  "minutesPerLineToDevelop": 30,
+  "remediationMinutes": {
+    "CA1502": 30,
+    "CA1505": 60,
+    "CA1506": 45,
+    "CA1716": 10,
+    "CA1848": 5,
+    "CA1873": 5,
+    "CA1305": 5,
+    "CA1859": 5,
+    "CA2100": 30,
+    "IDE": 5,
+    "CA": 10,
+    "complexity": 30,
+    "max-lines-per-function": 30,
+    "max-depth": 15,
+    "react-hooks/set-state-in-effect": 20,
+    "react-hooks/immutability": 15,
+    "react-hooks/exhaustive-deps": 15,
+    "react-refresh/only-export-components": 10,
+    "no-unused-vars": 5,
+    "eslint": 10
+  },
+  "securityRules": ["CA2100", "CA5350", "CA5351", "CA5394"],
+  "reviewedHotspots": [
+    {
+      "rule": "CA2100",
+      "file": "Repositories/ReservationRepository.cs",
+      "member": "GetForAdminAsync",
+      "status": "SAFE",
+      "justification": "WHERE clause is assembled only from constant fragments in BuildAdminFilters; every user value (dates, status, table number, booking reference) is bound as a MySqlParameter. Column list is a const."
+    },
+    {
+      "rule": "CA2100",
+      "file": "Repositories/OutboxRepository.cs",
+      "member": "ClaimBatchAsync",
+      "status": "SAFE",
+      "justification": "IN (...) list contains generated placeholder names @Id0..@IdN only; the ids themselves are bound as parameters and come from the database, not from a request."
+    }
+  ]
+}

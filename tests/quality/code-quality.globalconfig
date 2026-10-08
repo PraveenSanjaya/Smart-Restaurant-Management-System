@@ -1,0 +1,28 @@
+# SE3112 – Code Quality & Metrics: analyzer rules raised to "warning" for the quality stage.
+# Each warning is counted as a code smell; remediation effort per rule family is defined in quality-gate.config.json.
+is_global = true
+global_level = 100
+
+# --- Maintainability metrics (thresholds in CodeMetricsConfig.txt) ---------------------
+dotnet_diagnostic.CA1502.severity = warning   # excessive cyclomatic complexity
+dotnet_diagnostic.CA1505.severity = warning   # unmaintainable code (low maintainability index)
+dotnet_diagnostic.CA1506.severity = warning   # excessive class coupling
+
+# --- Security hotspots: ADO.NET builds SQL by hand -------------------------------------
+# Reported as warnings so the build finishes; quality-gate.mjs fails the pipeline for every
+# occurrence that is not listed (with a justification) under "reviewedHotspots".
+dotnet_diagnostic.CA2100.severity = warning   # SQL query built from untrusted input
+dotnet_diagnostic.CA5350.severity = warning   # weak cryptographic algorithm
+dotnet_diagnostic.CA5351.severity = warning   # broken cryptographic algorithm
+dotnet_diagnostic.CA5394.severity = warning   # insecure randomness
+
+# --- Dead code / unused values ----------------------------------------------------------
+dotnet_diagnostic.IDE0051.severity = warning  # unused private member
+dotnet_diagnostic.IDE0052.severity = warning  # unread private member
+dotnet_diagnostic.IDE0059.severity = warning  # unnecessary assignment
+dotnet_diagnostic.IDE0060.severity = warning  # unused parameter
+
+# --- Reliability ------------------------------------------------------------------------
+dotnet_diagnostic.CA2007.severity = none      # ConfigureAwait – not needed in ASP.NET Core
+dotnet_diagnostic.CA2016.severity = warning   # forward the CancellationToken
+dotnet_diagnostic.CA1062.severity = none      # nullable reference types already cover this

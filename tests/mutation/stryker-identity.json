@@ -1,0 +1,20 @@
+{
+  "stryker-config": {
+    "project": "identity-service.csproj",
+    "test-projects": [
+      "identity-service-tests.csproj"
+    ],
+    "mutate": [
+      "**/Services/AuthService.cs",
+      "**/Services/UserService.cs",
+      "**/Services/JwtTokenGenerator.cs",
+      "**/Services/BcryptPasswordHasher.cs"
+    ],
+    "mutation-level": "Complete",
+    "coverage-analysis": "perTest",
+    "ignore-methods": ["*Log*", "ToString"],
+    "reporters": ["progress", "cleartext", "html", "json", "markdown"],
+    "thresholds": { "high": 85, "low": 70, "break": 60 },
+    "additional-timeout": 5000
+  }
+}
